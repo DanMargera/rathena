@@ -63,6 +63,7 @@ JobDatabase job_db;
 
 int pc_split_atoui(char* str, unsigned int* val, char sep, int max);
 static inline bool pc_attendance_rewarded_today( struct map_session_data* sd );
+static void adjust_exp_based_on_level(struct map_session_data *sd, t_exp *base_exp, t_exp *job_exp);
 
 #define PVP_CALCRANK_INTERVAL 1000	// PVP calculation interval
 
@@ -7789,6 +7790,7 @@ int pc_checkjoblevelup(struct map_session_data *sd)
 static void pc_calcexp(struct map_session_data *sd, t_exp *base_exp, t_exp *job_exp, struct block_list *src)
 {
 	int bonus = 0, vip_bonus_base = 0, vip_bonus_job = 0;
+    adjust_exp_based_on_level(sd, base_exp, job_exp);
 
 	if (src) {
 		struct status_data *status = status_get_status_data(src);
@@ -15051,4 +15053,32 @@ void do_init_pc(void) {
 	ers_chunk_size(pc_sc_display_ers, 150);
 	ers_chunk_size(num_reg_ers, 300);
 	ers_chunk_size(str_reg_ers, 50);
+}
+
+static void adjust_exp_based_on_level(struct map_session_data *sd, t_exp *base_exp, t_exp *job_exp)
+{
+    int bonus_base = 0, bonus_job = 0;
+    if (*base_exp && sd->status.base_level >= 75) {
+        auto blvl = sd->status.base_level;
+        if (blvl >= 97) {
+            bonus_base = 125 + (blvl - 96)*2;
+        } else if (blvl >= 91) {
+            bonus_base = 100 + (blvl - 91)*5;
+        } else if (blvl >= 80) {
+            bonus_base = 75 + (blvl - 80)*2;
+        } else if (blvl >= 75) {
+            bonus_base = 30 + (blvl - 75)*5;
+        }
+		t_exp exp = (t_exp)(*base_exp + ((double)*base_exp * ((bonus_base) / 100.)));
+		*base_exp = cap_value(exp, 1, MAX_EXP);
+    }
+    if (*job_exp && sd->status.job_level >= 36 && !(sd->class_&JOBL_2)) {
+        auto jlvl = sd->status.job_level;
+        bonus_job = 50 + (jlvl - 38)*10;
+		t_exp exp = (t_exp)(*job_exp + ((double)*job_exp * ((bonus_job) / 100.)));
+		*job_exp = cap_value(exp, 1, MAX_EXP);
+    }
+    if (bonus_base != 0 || bonus_job != 0) {
+        ShowDebug("AdjustedEXP - Base Modifier->%d\% , Job Modifier->%d\%\n", bonus_base+100, bonus_job+100);
+    }
 }
